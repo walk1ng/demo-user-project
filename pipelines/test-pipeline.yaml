@@ -1,0 +1,166 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: test-pipiline
+  namespace: user-pipelines
+spec:
+  params:
+  - name: REVISION
+    value: main
+  taskRunSpecs:
+  - pipelineTaskName: git-clone-deployment
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: 'true'
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: 'user-pipelines'
+        vault.hashicorp.com/agent-run-as-user: '0' 
+        vault.hashicorp.com/agent-run-as-group: '0'
+        vault.hashicorp.com/agent-inject-secret-id_ecdsa: "git/data/github/user-deployments/default/readwrite"
+        vault.hashicorp.com/secret-volume-path-id_ecdsa: "/root/.ssh"
+        vault.hashicorp.com/agent-inject-perms-id_ecdsa: '0400'
+        vault.hashicorp.com/agent-inject-template-id_ecdsa: |
+          {{- with secret "git/data/github/user-deployments/default/readwrite" -}}
+          {{ .Data.data.deploykey }}
+          {{- end -}}
+  - pipelineTaskName: image-build
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: 'true'
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: 'user-pipelines'
+        vault.hashicorp.com/agent-run-as-user: '0' 
+        vault.hashicorp.com/agent-run-as-group: '0'
+        vault.hashicorp.com/agent-inject-secret-config.json: "repo/data/github/container/lanbing/default/readwrite"
+        vault.hashicorp.com/secret-volume-path-config.json: "/kaniko/.docker"
+        vault.hashicorp.com/agent-inject-perms-config.json: '0400'
+        vault.hashicorp.com/agent-inject-template-config.json: |
+          {{- with secret "repo/data/github/container/lanbing/default/readwrite" -}}
+          { "auths": { "ghcr.io":{ "auth":"{{.Data.data.auth}}" } } }
+          {{- end -}}
+  - pipelineTaskName: manifest-update
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: 'true'
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: 'user-pipelines'
+        vault.hashicorp.com/agent-run-as-user: '0' 
+        vault.hashicorp.com/agent-run-as-group: '0'
+        vault.hashicorp.com/agent-inject-secret-id_ecdsa: "git/data/github/user-deployments/default/readwrite"
+        vault.hashicorp.com/secret-volume-path-id_ecdsa: "/root/.ssh"
+        vault.hashicorp.com/agent-inject-perms-id_ecdsa: '0400'
+        vault.hashicorp.com/agent-inject-template-id_ecdsa: |
+          {{- with secret "git/data/github/user-deployments/default/readwrite" -}}
+          {{ .Data.data.deploykey }}
+          {{- end -}}
+  pipelineSpec:
+    params:
+      - name: REVISION
+        type: string
+        description: Revision to checkout. (branch, tag, sha, ref, etc...)
+        default: ""
+    tasks:
+    - name: git-clone-sourcecode
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+      - name: output
+        workspace: source-volume
+      params:
+      - name: url
+        value: https://github.com/lanbingcloud/demo-user-project.git
+      - name: revision
+        value: $(params.REVISION)
+      - name: subdirectory
+        value: sourcecode
+    - name: git-clone-deployment
+      runAfter:
+      - git-clone-sourcecode
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+      - name: output
+        workspace: source-volume
+      params:
+      - name: url
+        value: git@github.com:lanbingcloud/demo-user-deployments.git
+      - name: revision
+        value: $(params.REVISION)
+      - name: subdirectory
+        value: deployment
+    - name: mvn-build
+      runAfter:
+      - git-clone-deployment
+      taskRef:
+        name: maven
+        kind: ClusterTask
+      workspaces:
+      - name: source
+        workspace: source-volume
+      - name: maven-settings
+        workspace: empty-dir
+      - name: maven-repository
+        workspace: maven-repository-volume
+      params:
+      - name: GOALS
+        value: 
+          - -DskipTests
+          - clean
+          - install
+          - -f
+          - sourcecode/pom.xml
+    - name: image-build
+      runAfter:
+      - mvn-build
+      taskRef:
+        name: kaniko
+        kind: ClusterTask
+      workspaces:
+      - name: source
+        workspace: source-volume
+      params:
+      - name: IMAGE
+        value: ghcr.io/lanbingcloud/devops-sample:0.0.1-$(tasks.git-clone-sourcecode.results.commit)
+      - name: DOCKERFILE
+        value: ./sourcecode/Dockerfile
+      - name: CONTEXT
+        value: ./sourcecode
+    - name: manifest-update
+      runAfter:
+      - image-build
+      taskRef:
+        name: git-cli
+        kind: ClusterTask
+      workspaces:
+      - name: source
+        workspace: source-volume
+      params:
+      - name: BASE_IMAGE
+        value: gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/git-init:v0.29.0
+      - name: GIT_USER_NAME
+        value: pipelinerobot
+      - name: GIT_USER_EMAIL
+        value: pipelinerobot@nautes.io
+      - name: GIT_SCRIPT
+        value: |
+          cd deployment
+          sed -i -e "s#ghcr.io/lanbingcloud/devops-sample.*#$(tasks.image-build.results.IMAGE_URL)#g" deployments/test/devops-sample.yaml
+          git add deployments/test/devops-sample.yaml
+          git commit -a -m "automatic update by pipeline bot: $(tasks.image-build.results.IMAGE_URL)"
+          git push origin HEAD:$(params.REVISION) --force
+    workspaces:
+    - name: source-volume
+    - name: empty-dir
+    - name: maven-repository-volume
+  workspaces:
+  - name: empty-dir
+    emptyDir: {}
+  - name: source-volume
+    persistentVolumeClaim:
+      claimName: source-pvc
+  - name: maven-repository-volume
+    persistentVolumeClaim:
+      claimName: maven-repository-pvc
+

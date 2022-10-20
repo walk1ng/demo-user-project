@@ -1,0 +1,65 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: dev-pipiline
+  namespace: user-pipelines
+spec:
+  params:
+  - name: REVISION
+    value: main
+  pipelineSpec:
+    params:
+      - name: REVISION
+        type: string
+        description: Revision to checkout. (branch, tag, sha, ref, etc...)
+        default: ""
+    tasks:
+    - name: git-clone-sourcecode
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+      - name: output
+        workspace: source-volume
+      params:
+      - name: url
+        value: https://github.com/lanbingcloud/demo-user-project.git
+      - name: revision
+        value: $(params.REVISION)
+      - name: subdirectory
+        value: sourcecode
+    - name: mvn-build
+      runAfter:
+      - git-clone-sourcecode
+      taskRef:
+        name: maven
+        kind: ClusterTask
+      workspaces:
+      - name: source
+        workspace: source-volume
+      - name: maven-settings
+        workspace: empty-dir
+      - name: maven-repository
+        workspace: maven-repository-volume
+      params:
+      - name: GOALS
+        value: 
+          - -DskipTests
+          - clean
+          - install
+          - -f
+          - sourcecode/pom.xml
+    workspaces:
+    - name: source-volume
+    - name: empty-dir
+    - name: maven-repository-volume
+  workspaces:
+  - name: empty-dir
+    emptyDir: {}
+  - name: source-volume
+    persistentVolumeClaim:
+      claimName: source-pvc
+  - name: maven-repository-volume
+    persistentVolumeClaim:
+      claimName: maven-repository-pvc
+
