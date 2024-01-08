@@ -31,11 +31,11 @@ spec:
         vault.hashicorp.com/role: 'user-pipelines'
         vault.hashicorp.com/agent-run-as-user: '0' 
         vault.hashicorp.com/agent-run-as-group: '0'
-        vault.hashicorp.com/agent-inject-secret-config.json: "repo/data/github/container/lanbing/default/readwrite"
+        vault.hashicorp.com/agent-inject-secret-config.json: "repo/data/github/container/walk1ng/default/readwrite"
         vault.hashicorp.com/secret-volume-path-config.json: "/kaniko/.docker"
         vault.hashicorp.com/agent-inject-perms-config.json: '0400'
         vault.hashicorp.com/agent-inject-template-config.json: |
-          {{- with secret "repo/data/github/container/lanbing/default/readwrite" -}}
+          {{- with secret "repo/data/github/container/walk1ng/default/readwrite" -}}
           { "auths": { "ghcr.io":{ "auth":"{{.Data.data.auth}}" } } }
           {{- end -}}
   - pipelineTaskName: manifest-update
