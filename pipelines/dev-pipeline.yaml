@@ -23,7 +23,7 @@ spec:
         workspace: source-volume
       params:
       - name: url
-        value: https://github.com/lanbingcloud/demo-user-project.git
+        value: https://github.com/walk1ng/demo-user-project.git
       - name: revision
         value: $(params.REVISION)
       - name: subdirectory

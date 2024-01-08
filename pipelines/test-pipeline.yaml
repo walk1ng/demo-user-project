@@ -69,7 +69,7 @@ spec:
         workspace: source-volume
       params:
       - name: url
-        value: https://github.com/lanbingcloud/demo-user-project.git
+        value: https://github.com/walk1ng/demo-user-project.git
       - name: revision
         value: $(params.REVISION)
       - name: subdirectory
@@ -85,7 +85,7 @@ spec:
         workspace: source-volume
       params:
       - name: url
-        value: git@github.com:lanbingcloud/demo-user-deployments.git
+        value: git@github.com:walk1ng/demo-user-deployments.git
       - name: revision
         value: $(params.REVISION)
       - name: subdirectory
@@ -122,7 +122,7 @@ spec:
         workspace: source-volume
       params:
       - name: IMAGE
-        value: ghcr.io/lanbingcloud/devops-sample:0.0.1-$(tasks.git-clone-sourcecode.results.commit)
+        value: ghcr.io/walk1ng/devops-sample:0.0.1-$(tasks.git-clone-sourcecode.results.commit)
       - name: DOCKERFILE
         value: ./sourcecode/Dockerfile
       - name: CONTEXT
@@ -146,7 +146,7 @@ spec:
       - name: GIT_SCRIPT
         value: |
           cd deployment
-          sed -i -e "s#ghcr.io/lanbingcloud/devops-sample.*#$(tasks.image-build.results.IMAGE_URL)#g" deployments/test/devops-sample.yaml
+          sed -i -e "s#ghcr.io/walk1ng/devops-sample.*#$(tasks.image-build.results.IMAGE_URL)#g" deployments/test/devops-sample.yaml
           git add deployments/test/devops-sample.yaml
           git commit -a -m "automatic update by pipeline bot: $(tasks.image-build.results.IMAGE_URL)"
           git push origin HEAD:$(params.REVISION) --force
